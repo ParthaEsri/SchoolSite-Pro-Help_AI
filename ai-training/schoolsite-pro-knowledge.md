@@ -3721,3 +3721,10 @@ Built for ArcGIS Pro 3.0. First release out of beta.
 
 - Built for ArcGIS Pro 3.0.
 - First release out of beta.
+
+### Version 1.6.4 (October 2021)
+
+released by partha.
+
+- Built for ArcGIS Pro 3.0.
+- First release out of beta.
