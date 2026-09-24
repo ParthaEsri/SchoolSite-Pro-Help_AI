@@ -377,6 +377,15 @@ window.SCHOOL_SITE_RELEASE_NOTES = [
       "Built for ArcGIS Pro 3.0.",
       "First release out of beta."
     ]
+  },
+   {
+    "version": "1.6.4",
+    "date": "October 2021",
+    "description": "released by partha.",
+    "features": [
+      "Built for ArcGIS Pro 3.0.",
+      "First release out of beta."
+    ]
   }
 ];
 
