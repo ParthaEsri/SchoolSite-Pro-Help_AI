@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+  <title id="title">Report sample placeholder</title>
+  <desc id="desc">Replace this shared placeholder with a screenshot or sample output for the report.</desc>
+  <rect width="1200" height="675" fill="#f7f4ea"/>
+  <rect x="54" y="54" width="1092" height="567" rx="18" fill="#ffffff" stroke="#d8d1bf" stroke-width="3"/>
+  <rect x="86" y="92" width="430" height="28" rx="14" fill="#c1852f"/>
+  <rect x="86" y="164" width="1018" height="46" rx="6" fill="#e7eef3"/>
+  <g fill="#dce8df">
+    <rect x="86" y="238" width="190" height="238" rx="8"/>
+    <rect x="302" y="238" width="190" height="238" rx="8"/>
+    <rect x="518" y="238" width="190" height="238" rx="8"/>
+    <rect x="734" y="238" width="190" height="238" rx="8"/>
+    <rect x="950" y="238" width="154" height="238" rx="8"/>
+  </g>
+  <text x="600" y="548" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" fill="#52606d">Replace with report sample output</text>
+</svg>

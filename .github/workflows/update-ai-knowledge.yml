@@ -1,0 +1,35 @@
+name: Update AI knowledge base
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'js/data.js'
+      - 'js/docs.js'
+      - 'scripts/generate-knowledge-base.js'
+      - '.github/workflows/update-ai-knowledge.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Generate Markdown knowledge base
+        run: node scripts/generate-knowledge-base.js
+
+      - name: Commit generated knowledge base
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: update AI knowledge base'
+          file_pattern: ai-training/schoolsite-pro-knowledge.md

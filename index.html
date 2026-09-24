@@ -1,0 +1,1843 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SchoolSite Pro — Planning Documentation</title>
+<link rel="icon" href="assets/favicon.ico">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <button class="brand" onclick="route('home')"><img src="assets/favicon.ico" alt=""><span>SchoolSite Pro</span><small>build <span data-app-build></span></small></button>
+    <nav id="desktopNav">
+      <button data-route="home" onclick="route('home')">Overview</button>
+      <button data-route="docs" onclick="route('docs')">Documentation</button>
+      <button data-route="toolkit" onclick="route('toolkit')">Toolkit</button>
+      <button data-route="download" onclick="route('download')">Download</button>
+    </nav>
+   <div class="top-actions">
+
+  <button
+    class="menu-btn"
+    onclick="toggleMenu()"
+    aria-label="Open navigation"
+  >
+    ☰
+  </button>
+
+</div>
+  </div>
+  <div id="mobileNav" class="mobile-nav">
+    <button onclick="route('home');toggleMenu()">Overview</button>
+    <button onclick="route('docs');toggleMenu()">Documentation</button>
+    <button onclick="route('toolkit');toggleMenu()">Toolkit</button>
+    <button onclick="route('download');toggleMenu()">Download</button>
+  </div>
+</header>
+
+<div class="app">
+<aside id="sidebar"></aside>
+<main id="appMain"></main>
+</div>
+
+<footer>
+  <div class="footer-inner">
+    <div><strong>SchoolSite Pro</strong><p>Independent documentation experience for ArcGIS Pro school planning, redistricting and forecasting.</p></div>
+    <div class="footer-links"><button onclick="route('home')">Overview</button><button onclick="route('docs')">Docs</button><button onclick="route('toolkit')">Toolkit</button><button onclick="route('download')">Download</button></div>
+  </div>
+  <div class="footer-bottom">Build <span data-app-build></span> · <span data-app-release-date></span> · SchoolSite Pro documentation · Local content based on the official SchoolSite Pro Help.</div>
+</footer>
+
+<div id="searchOverlay" class="overlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-dialog">
+    <div class="search-head">
+
+  <div class="search-dialog-input">
+
+    <span>⌕</span>
+
+    <input
+      id="globalSearch"
+      placeholder="Search documentation and tools…"
+      autocomplete="off"
+      oninput="renderSearch(this.value)"
+      onkeydown="handleGlobalSearchKey(event)"
+    >
+
+  </div>
+
+  <button
+    class="search-close"
+    onclick="closeSearch()"
+  >
+    ESC
+  </button>
+
+</div>
+
+    <div id="searchResults"></div>
+  </div>
+</div>
+
+<script src="js/docs.js"></script>
+<script src="js/data.js"></script>
+<script>
+const RELEASE = window.SCHOOL_SITE_RELEASE;
+const docs = window.SCHOOL_SITE_DOCS;
+const tools = window.SCHOOL_SITE_TOOLS;
+const sections = [...new Set(docs.map(x=>x.section))];
+let currentDoc = null;
+
+// Apply release metadata to both the static shell and route-generated markup.
+function syncReleaseLabels() {
+  document.querySelectorAll('[data-app-build]').forEach(element => {
+    element.textContent = RELEASE.version;
+  });
+
+  document.querySelectorAll('[data-app-release-date]').forEach(element => {
+    element.textContent = RELEASE.releaseDate;
+  });
+}
+
+syncReleaseLabels();
+
+function route(name, id){
+  if(name==='doc' && id){ location.hash='doc/'+id; }
+  else location.hash=name;
+  renderRoute();
+}
+function renderRoute(){
+  const parts=location.hash.replace(/^#/,'').split('/');
+  const page=parts[0]||'home', id=parts[1];
+  document.querySelectorAll('#desktopNav button').forEach(b=>b.classList.toggle('active',b.dataset.route===page || (page==='doc'&&b.dataset.route==='docs')));
+  if(page==='doc' && id) renderDoc(id);
+  else if(page==='docs') renderDocs();
+  else if(page==='toolkit') renderToolkit();
+  else if(page==='download') renderDownload();
+  else renderHome();
+  renderSidebar(page,id);
+  syncReleaseLabels();
+  window.scrollTo(0,0);
+}
+function renderSidebar(page,id){
+  const s=document.getElementById('sidebar');
+  if(page==='docs'||page==='doc'){
+    s.innerHTML=`<div class="side-search">
+      <label class="side-search-label" for="headerSearch">Search documents</label>
+      <div class="side-search-field">
+        <span aria-hidden="true">⌕</span>
+        <input id="headerSearch" type="search" placeholder="Search documents..." autocomplete="off" oninput="searchDocuments(this.value)" onkeydown="handleHeaderSearchKey(event)">
+      </div>
+    </div>` + [...sections].sort((a,b)=>{
+      if (a === 'Start here') return -1;
+      if (b === 'Start here') return 1;
+      if (a === 'FAQ') return 1;
+      if (b === 'FAQ') return -1;
+      return a.localeCompare(b);
+    }).map((sec,index)=>{
+      const items=docs
+        .filter(d=>d.section===sec)
+        .sort((a,b)=>a.title.localeCompare(b.title));
+      const activeInGroup = items.some(d => d.id === id);
+      const openByDefault = !id && index === 0;
+      return `<details class="side-group" ${activeInGroup || openByDefault ? 'open' : ''}>
+        <summary class="side-section">${sec}</summary>
+        <div class="side-links">${items.map(d=>`<button class="side-link ${d.id===id?'active':''}" onclick="route('doc','${d.id}')">${d.title}</button>`).join('')}</div>
+      </details>`;
+    }).join('');
+
+  } else if(page==='toolkit') {
+    const categories = toolCategories();
+    s.innerHTML = `<div class="side-search toolkit-side-search">
+      <label class="side-search-label" for="toolSearch">Search tools</label>
+      <div class="side-search-field">
+        <span aria-hidden="true">⌕</span>
+        <input id="toolSearch" type="search" placeholder="Search tools..." autocomplete="off" oninput="activeToolIndex = null; filterTools(this.value)">
+      </div>
+    </div>` + categories.map((category,index) => {
+      const items = (category === 'All'
+        ? tools
+        : tools.filter(tool => toolCategory(tool) === category))
+        .slice()
+        .sort((a,b)=>a.name.localeCompare(b.name));
+      const openByDefault = activeToolCat === category || (!activeToolCat && index === 0);
+      return `<details class="side-group" data-tool-category="${escapeHtml(category)}" ${openByDefault ? 'open' : ''}>
+        <summary class="side-section" onclick='selectToolCategory(${JSON.stringify(category)})'>${escapeHtml(toolGroupLabel(category))}</summary>
+        <div class="side-links">${items.map((tool) => {
+          const toolIndex = tools.indexOf(tool);
+          return `<button class="side-link" onclick="selectTool(${toolIndex})">${escapeHtml(tool.name)}</button>`;
+        }).join('')}</div>
+      </details>`;
+    }).join('');
+    const toolSearch = document.getElementById('toolSearch');
+    if (toolSearch) toolSearch.value = '';
+    filterTools('');
+  } else {
+    s.innerHTML=`
+      <button class="side-link ${page==='home'?'active':''}" onclick="route('home')">Overview</button>
+      <button class="side-link" onclick="route('docs')">Documentation</button>
+      <button class="side-link" onclick="route('toolkit')">Toolkit</button>
+      <button class="side-link" onclick="route('download')">Download</button>`;
+  }
+}
+
+function renderHome() {
+  const overviewCards = [
+    {
+      section: 'Overview',
+      title: 'SchoolSite Pro',
+      summary: 'A planning workspace for school data, forecasts, attendance boundaries, reports and GIS analysis.',
+      id: 'home'
+    },
+    ...sections
+      .filter(section => !['Start here', 'Tools', 'Troubleshooting'].includes(section))
+      .map(section => {
+        const doc = section === 'Redistricting'
+          ? docs.find(item => item.id === 'redistricting-tour')
+          : docs.find(item => item.section === section);
+
+        return {
+          section,
+          title: doc.title,
+          summary: doc.summary,
+          id: doc.id
+        };
+      })
+  ];
+
+  document.getElementById('appMain').innerHTML = `
+
+    <!-- =========================================
+         SCHOOL SITE PRO OVERVIEW HERO
+         ========================================= -->
+
+    <section class="ss-overview">
+
+      <div class="ss-hero">
+
+        <div class="ss-hero-copy">
+
+          <div class="ss-badge">
+            <span class="ss-badge-dot"></span>
+            ARCGIS PRO · SCHOOL PLANNING
+          </div>
+
+          <h1>
+            Plan smarter.<br>
+            <span>See the whole picture.</span>
+          </h1>
+
+          <p class="ss-hero-description">
+           SchoolSite Pro is the planning tool developed and used in-house by MGT staff and also empowers school planners with GIS experience to create student forecasts and attendance area redistricting plans. As an extension for Esri’s ArcGIS Pro, SchoolSite Pro allows users to compare their plans with the wealth of GIS data available to planners and perform powerful analysis.
+          </p>
+
+          <div class="ss-hero-actions">
+
+            <button
+              class="ss-primary-btn"
+              onclick="route('docs')"
+            >
+              Explore documentation
+              <span>→</span>
+            </button>
+
+            <button
+              class="ss-secondary-btn"
+              onclick="route('toolkit')"
+            >
+              Explore toolkit
+            </button>
+
+          </div>
+
+          <div class="ss-hero-meta">
+
+            <div>
+              <strong data-app-build></strong>
+              <span>Build</span>
+            </div>
+
+            <div>
+              <strong>3.3+</strong>
+              <span>ArcGIS Pro</span>
+            </div>
+
+            <div>
+              <strong>Windows</strong>
+              <span>Platform</span>
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <!-- =========================================
+             APPLICATION PREVIEW
+             ========================================= -->
+
+        <div class="ss-hero-visual">
+
+          <div class="ss-glow ss-glow-one"></div>
+          <div class="ss-glow ss-glow-two"></div>
+
+          <div class="ss-app-window">
+
+            <div class="ss-window-top">
+
+              <div class="ss-window-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+
+              <div class="ss-window-title">
+                SchoolSite Pro
+              </div>
+
+              <div class="ss-window-build">
+                <span data-app-build></span>
+              </div>
+
+            </div>
+
+            <div class="ss-app-preview">
+
+              <img
+                src="assets/images/home.png"
+                alt="SchoolSite Pro application preview"
+              >
+
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- =========================================
+           PRODUCT TOUR
+           ========================================= -->
+
+      <section class="ss-tour-section">
+
+        <div class="ss-tour-heading">
+
+          <div>
+
+            <span class="ss-section-label">
+              APPLICATION TOUR
+            </span>
+
+            <h2>
+              See how SchoolSite Pro fits into
+              your planning workflow.
+            </h2>
+
+          </div>
+
+          <p>
+            Explore the main planning experience through a
+            short visual tour of planning, analysis, sharing,
+            and forecasting workflows.
+          </p>
+
+        </div>
+
+
+        <div class="ss-tour">
+
+          <div class="ss-tour-stage">
+
+            <!-- Slide 1 -->
+            <div class="ss-tour-slide active">
+
+              <div class="ss-tour-image">
+
+                <img
+                 src="assets/images/enrollment.png"
+                  alt="School planning dashboard preview"
+                >
+
+              </div>
+
+              <div class="ss-tour-caption">
+
+                <span>01</span>
+
+                <div>
+                  <strong>Plan</strong>
+
+                  <p>
+                    Build attendance-area and planning
+                    scenarios directly inside ArcGIS Pro.
+                  </p>
+                </div>
+
+              </div>
+
+            </div>
+
+
+            <!-- Slide 2 -->
+            <div class="ss-tour-slide">
+
+              <div class="ss-tour-image">
+
+                <img
+                  src="assets/images/forecast_plan.png"
+                  alt="Planning analysis preview"
+                >
+
+              </div>
+
+              <div class="ss-tour-caption">
+
+                <span>02</span>
+
+                <div>
+                  <strong>Analyze</strong>
+
+                  <p>
+                    Review student populations, capacity,
+                    boundaries and forecast results.
+                  </p>
+                </div>
+
+              </div>
+
+            </div>
+
+
+            <!-- Slide 3 -->
+            <div class="ss-tour-slide">
+
+              <div class="ss-tour-image">
+
+                <img
+                  src="assets/images/exportstats.png"
+                  alt="Collaborative planning preview"
+                >
+
+              </div>
+
+              <div class="ss-tour-caption">
+
+                <span>03</span>
+
+                <div>
+                  <strong>Share</strong>
+
+                  <p>
+                    Export planning results and communicate
+                    proposed scenarios with stakeholders.
+                  </p>
+                </div>
+
+              </div>
+
+            </div>
+
+
+            <!-- Slide 4 -->
+            <div class="ss-tour-slide">
+
+              <div class="ss-tour-image">
+
+                <img
+                  src="assets/images/forecast.png"
+                  alt="School planning workflow preview"
+                >
+
+              </div>
+
+              <div class="ss-tour-caption">
+
+                <span>04</span>
+
+                <div>
+                  <strong>Forecast</strong>
+
+                  <p>
+                    Model future resident populations,
+                    housing growth and enrollment.
+                  </p>
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <!-- Tour navigation -->
+
+          <div class="ss-tour-controls">
+
+            <button
+              class="ss-tour-arrow"
+              id="ssTourPrev"
+              aria-label="Previous tour slide"
+            >
+              ←
+            </button>
+
+            <div class="ss-tour-progress">
+
+              <button
+                class="ss-tour-dot active"
+                data-slide="0"
+                aria-label="Tour slide 1"
+              ></button>
+
+              <button
+                class="ss-tour-dot"
+                data-slide="1"
+                aria-label="Tour slide 2"
+              ></button>
+
+              <button
+                class="ss-tour-dot"
+                data-slide="2"
+                aria-label="Tour slide 3"
+              ></button>
+
+              <button
+                class="ss-tour-dot"
+                data-slide="3"
+                aria-label="Tour slide 4"
+              ></button>
+
+            </div>
+
+            <button
+              class="ss-tour-arrow"
+              id="ssTourNext"
+              aria-label="Next tour slide"
+            >
+              →
+            </button>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- =========================================
+           START HERE
+           ========================================= -->
+
+      <section class="section ss-content-section">
+
+        <div class="section-head">
+
+          <div>
+
+            <span class="eyebrow">
+              START HERE
+            </span>
+
+            <h2>
+              Everything in one place
+            </h2>
+
+          </div>
+
+          <p>
+            Use the documentation browser when you need
+            procedure-level guidance, or the toolkit when
+            you need to find a specific command.
+          </p>
+
+        </div>
+
+
+        <div class="card-grid">
+
+          ${overviewCards.map(card => {
+            return `
+
+              <button
+                class="card"
+                onclick="route('doc','${card.id}')"
+              >
+
+                <span class="card-kicker">
+                  ${card.section}
+                </span>
+
+                <h3>
+                  ${card.title}
+                </h3>
+
+                <p>
+                  ${card.summary}
+                </p>
+
+                <span class="arrow">
+                  Open section →
+                </span>
+
+              </button>
+
+            `;
+
+          }).join('')}
+
+        </div>
+
+      </section>
+
+
+      <!-- =========================================
+           WORKFLOW
+           ========================================= -->
+
+      <section class="band ss-workflow-band">
+
+        <div class="section">
+
+          <div class="section-head">
+
+            <div>
+
+              <span class="eyebrow">
+                WORKFLOW
+              </span>
+
+              <h2>
+                From data to a delivered plan
+              </h2>
+
+            </div>
+
+          </div>
+
+
+          <div class="steps">
+
+            <div>
+              <b>01</b>
+
+              <h3>
+                Prepare data
+              </h3>
+
+              <p>
+                Import and validate Study Areas,
+                Schools, Students and optional
+                forecast datasets.
+              </p>
+
+            </div>
+
+
+            <div>
+              <b>02</b>
+
+              <h3>
+                Create
+              </h3>
+
+              <p>
+                Build a plan or forecast from
+                the Create menu.
+              </p>
+
+            </div>
+
+
+            <div>
+              <b>03</b>
+
+              <h3>
+                Analyze
+              </h3>
+
+              <p>
+                Modify boundaries, factors,
+                statistics and reports.
+              </p>
+
+            </div>
+
+
+            <div>
+              <b>04</b>
+
+              <h3>
+                Share
+              </h3>
+
+              <p>
+                Export the plan, statistics
+                and planning outputs.
+              </p>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- =========================================
+           DOWNLOAD CALLOUT
+           ========================================= -->
+
+      <section class="section">
+
+        <div class="callout">
+
+          <div>
+
+            <span class="eyebrow">
+              BUILD <span data-app-build></span>
+            </span>
+
+            <h2>
+              New site, same planning knowledge.
+            </h2>
+
+            <p>
+              The current signed installer and release notes
+              are available from the download page.
+            </p>
+
+          </div>
+
+          <button
+            class="primary"
+            onclick="route('download')"
+          >
+            Download installer →
+          </button>
+
+        </div>
+
+      </section>
+
+    </section>
+
+  `;
+
+
+  // =========================================
+  // PRODUCT TOUR JAVASCRIPT
+  // =========================================
+
+  const slides = [
+    ...document.querySelectorAll('.ss-tour-slide')
+  ];
+
+  const dots = [
+    ...document.querySelectorAll('.ss-tour-dot')
+  ];
+
+  const previousButton =
+    document.getElementById('ssTourPrev');
+
+  const nextButton =
+    document.getElementById('ssTourNext');
+
+  let currentSlide = 0;
+
+  let tourTimer;
+
+
+  // =========================================
+  // SHOW SLIDE
+  // =========================================
+
+  function showTourSlide(index) {
+
+    if (!slides.length) {
+      return;
+    }
+
+    currentSlide =
+      (index + slides.length) % slides.length;
+
+
+    slides.forEach((slide, i) => {
+
+      slide.classList.toggle(
+        'active',
+        i === currentSlide
+      );
+
+    });
+
+
+    dots.forEach((dot, i) => {
+
+      dot.classList.toggle(
+        'active',
+        i === currentSlide
+      );
+
+    });
+
+  }
+
+
+  // =========================================
+  // RESTART AUTO SLIDE
+  // =========================================
+
+  function restartTourTimer() {
+
+    clearInterval(tourTimer);
+
+    tourTimer = setInterval(() => {
+
+      showTourSlide(currentSlide + 1);
+
+    }, 5500);
+
+  }
+
+
+  // =========================================
+  // PREVIOUS BUTTON
+  // =========================================
+
+  if (previousButton) {
+
+    previousButton.onclick = function () {
+
+      showTourSlide(currentSlide - 1);
+
+      restartTourTimer();
+
+    };
+
+  }
+
+
+  // =========================================
+  // NEXT BUTTON
+  // =========================================
+
+  if (nextButton) {
+
+    nextButton.onclick = function () {
+
+      showTourSlide(currentSlide + 1);
+
+      restartTourTimer();
+
+    };
+
+  }
+
+
+  // =========================================
+  // DOT NAVIGATION
+  // =========================================
+
+  dots.forEach((dot, index) => {
+
+    dot.onclick = function () {
+
+      showTourSlide(index);
+
+      restartTourTimer();
+
+    };
+
+  });
+
+
+  // =========================================
+  // INITIAL SLIDE
+  // =========================================
+
+  showTourSlide(0);
+
+  restartTourTimer();
+
+
+  // =========================================
+  // PAUSE ON HOVER
+  // =========================================
+
+  const tour =
+    document.querySelector('.ss-tour');
+
+  if (tour) {
+
+    tour.addEventListener(
+      'mouseenter',
+      () => clearInterval(tourTimer)
+    );
+
+    tour.addEventListener(
+      'mouseleave',
+      restartTourTimer
+    );
+
+  }
+
+}
+
+function renderDocs(){
+ document.getElementById('appMain').innerHTML=`
+ <section class="page-head"><span class="eyebrow">DOCUMENTATION</span><h1>SchoolSite Pro documentation</h1><p>Search across the complete local guide. Select an article to open it without leaving this site.</p></section>
+ <section class="section docs-layout"><div class="docs-main">
+ <div id="docList" class="doc-list"></div></div></section>`;
+ filterDocs('');
+}
+
+function articleContentText(content) {
+  if (Array.isArray(content)) {
+    return content.map(item => articleContentText(item)).join(' ');
+  }
+
+  if (content && typeof content === 'object') {
+    if (content.type === 'image') {
+      return [content.alt || '', content.caption || '', content.src || ''].join(' ');
+    }
+
+    if (content.type === 'table') {
+      const rows = content.rows || [];
+      return rows.flat().map(item => articleContentText(item)).join(' ');
+    }
+
+    if (content.type === 'list' || content.type === 'steps' || content.type === 'ordered') {
+      return (content.items || []).map(item => articleContentText(item)).join(' ');
+    }
+
+    if (content.blocks) {
+      return content.blocks.map(item => articleContentText(item)).join(' ');
+    }
+
+    if (content.items) {
+      return content.items.map(item => articleContentText(item)).join(' ');
+    }
+
+    if (content.text) {
+      return String(content.text || '');
+    }
+
+    return Object.values(content).map(item => articleContentText(item)).join(' ');
+  }
+
+  return String(content || '');
+}
+
+function looksLikeListText(text) {
+  return /(?:^|\n)\s*(?:[-*•]|\d+\.)\s+/m.test(text);
+}
+
+function parseListText(text) {
+  return text
+    .split(/\n+/)
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const match = line.match(/^(?:[-*•]|\d+\.)\s+(.*)$/);
+      return match ? match[1].trim() : line;
+    })
+    .filter(Boolean);
+}
+
+function resolveTextValue(value) {
+  if (value == null) return '';
+  if (typeof value === 'string') return value.trim();
+  if (Array.isArray(value)) return value.map(resolveTextValue).filter(Boolean).join(' ');
+  if (typeof value === 'object') {
+    if (value.text) return resolveTextValue(value.text);
+    if (value.label) return resolveTextValue(value.label);
+    if (value.title) return resolveTextValue(value.title);
+    return Object.values(value).map(resolveTextValue).filter(Boolean).join(' ');
+  }
+  return String(value).trim();
+}
+
+function formatInlineRichText(value) {
+  const text = String(value ?? '');
+
+  if (!text) {
+    return '';
+  }
+
+  const parts = text.split(/(\*\*[^*]+\*\*|__[^_]+__)/g).filter(Boolean);
+  const formatted = parts.map(part => {
+    const match = part.match(/^\*\*(.+)\*\*$|^__(.+)__$|^(.+)$/);
+
+    if (match) {
+      const strongValue = match[1] ?? match[2];
+
+      if (strongValue !== undefined) {
+        return `<strong>${escapeHtml(strongValue)}</strong>`;
+      }
+    }
+
+    return escapeHtml(part);
+  }).join('');
+
+  return formatted
+    .replace(/"([^"]+)"/g, '“$1”')
+    .replace(/'([^']+)'/g, '‘$1’');
+}
+
+function renderListItem(item, ordered) {
+  if (typeof item === 'string') {
+    return `<li>${formatInlineRichText(item.trim())}</li>`;
+  }
+
+  if (Array.isArray(item)) {
+    return item.map(part => renderListItem(part, ordered)).join('');
+  }
+
+  if (item && typeof item === 'object') {
+    const textValue = resolveTextValue(item);
+    const labelText = textValue && textValue !== '[object Object]' ? textValue : 'Item';
+    const label = item.href
+      ? `<a href="${escapeHtml(item.href)}" onclick="${escapeHtml(item.onClick || '')}">${formatInlineRichText(labelText)}</a>`
+      : formatInlineRichText(labelText);
+    const children = item.subitems || item.items || item.children || [];
+    const nested = children.length ? `<${ordered ? 'ol' : 'ul'}>${children.map(child => renderListItem(child, item.ordered || ordered)).join('')}</${ordered ? 'ol' : 'ul'}>` : '';
+    return `<li>${label}${nested}</li>`;
+  }
+
+  const safe = resolveTextValue(item);
+  return `<li>${formatInlineRichText(safe || 'Item')}</li>`;
+}
+
+function isArticleHeadingText(text) {
+  const value = (text || '').trim();
+
+  if (!value || value.length > 90) {
+    return false;
+  }
+
+  if (/[.!?]/.test(value)) {
+    return false;
+  }
+
+  return !/^\s*[-*•]\s+/.test(value);
+}
+
+function renderStructuredBlock(block) {
+  if (Array.isArray(block)) {
+    return block.map(item => renderStructuredBlock(item)).join('');
+  }
+
+  if (typeof block === 'string') {
+    const trimmed = block.trim();
+    if (!trimmed) {
+      return '';
+    }
+    if (looksLikeListText(trimmed)) {
+      return `<ul>${parseListText(trimmed).map(item => renderListItem(item, false)).join('')}</ul>`;
+    }
+    return `<p>${formatInlineRichText(trimmed)}</p>`;
+  }
+
+  if (!block || typeof block !== 'object') {
+    return '';
+  }
+
+  if (block.type === 'image') {
+    return `<figure class="article-image"><img src="${escapeHtml(block.src || '')}" alt="${escapeHtml(block.alt || '')}"><figcaption>${escapeHtml(block.caption || '')}</figcaption></figure>`;
+  }
+
+  if (block.type === 'heading' || block.type === 'subheading') {
+    const tag = block.type === 'heading' ? 'h3' : 'h4';
+    return `<${tag}>${formatInlineRichText(block.text || block.content || block.title || '')}</${tag}>`;
+  }
+
+  if (block.type === 'bullet' || block.type === 'bullets') {
+    const items = block.items || block.bullets || [];
+    return `<ul>${items.map(item => renderListItem(item, false)).join('')}</ul>`;
+  }
+
+  if (block.type === 'table') {
+    const headers = block.headers || [];
+    const rows = block.rows || [];
+    const headerHtml = headers.length ? `<thead><tr>${headers.map(h => `<th>${escapeHtml(String(h))}</th>`).join('')}</tr></thead>` : '';
+    const bodyHtml = rows.length ? `<tbody>${rows.map(row => `<tr>${(row || []).map(cell => `<td>${escapeHtml(String(cell ?? ''))}</td>`).join('')}</tr>`).join('')}</tbody>` : '';
+    return `<table class="article-table">${headerHtml}${bodyHtml}</table>`;
+  }
+
+  if (block.type === 'paragraph' || block.text) {
+    const text = block.text || block.content || '';
+    if (isArticleHeadingText(text)) {
+      return `<p><strong>${formatInlineRichText(text)}</strong></p>`;
+    }
+    return `<p>${formatInlineRichText(text)}</p>`;
+  }
+
+  if (block.type === 'list' || block.type === 'steps' || block.type === 'ordered' || block.items) {
+    const ordered = block.type === 'steps' || block.type === 'ordered' || block.ordered;
+    const items = block.items || [];
+    return `<${ordered ? 'ol' : 'ul'}>${items.map(item => renderListItem(item, ordered)).join('')}</${ordered ? 'ol' : 'ul'}>`;
+  }
+
+  if (block.type === 'section' || block.blocks) {
+    return (block.blocks || []).map(item => renderStructuredBlock(item)).join('');
+  }
+
+  return '';
+}
+
+function renderArticleSection(heading, content) {
+  const items = Array.isArray(content) ? content : [content];
+  const sectionContent = items.map(item => renderStructuredBlock(item)).filter(Boolean).join('');
+
+  if (!sectionContent) {
+    return '';
+  }
+
+  return `<section>${heading ? `<h2>${escapeHtml(heading)}</h2>` : ''}${sectionContent}</section>`;
+}
+
+function filterDocs(q){
+ const query = q.trim().toLowerCase();
+ const list = docs.map(d => {
+   const title = d.title.toLowerCase();
+   const section = d.section.toLowerCase();
+   const summary = d.summary.toLowerCase();
+   const body = Array.isArray(d.body) ? d.body.map(x=>articleContentText(x[1])).join(' ').toLowerCase() : '';
+   const text = `${title} ${summary} ${section} ${body}`;
+   let score = -1;
+   if (!query) score = 0;
+   else if (title === query) score = 0;
+   else if (title.startsWith(query)) score = 1;
+   else if (section.startsWith(query)) score = 2;
+   else if (title.includes(query)) score = 3;
+   else if (summary.includes(query)) score = 4;
+   else if (text.includes(query)) score = 5;
+   return { doc: d, score };
+ }).filter(item => item.score >= 0).sort((a,b) => a.score - b.score).map(item => item.doc);
+ const resultNote = query ? `<div class="doc-results-note">${list.length} suggestion${list.length === 1 ? '' : 's'} for <strong>${escapeHtml(q.trim())}</strong></div>` : '';
+ document.getElementById('docList').innerHTML = resultNote + (list.map(d=>`<button class="doc-row" onclick="route('doc','${d.id}')"><div><span class="doc-section">${d.section}</span><h3>${d.title}</h3><p>${d.summary}</p></div><span>→</span></button>`).join('') || '<div class="empty">No documentation matched your search.</div>');
+}
+
+function searchDocuments(q) {
+ if (!document.getElementById('docList')) {
+   renderDocs();
+ }
+ const input = document.getElementById('headerSearch');
+ if (input) input.value = q;
+ filterDocs(q);
+}
+function renderDoc(id){
+ const d=docs.find(x=>x.id===id)||docs[0]; currentDoc=d;
+ if (id === 'release-notes') {
+   renderReleaseNotes();
+   return;
+ }
+ document.getElementById('appMain').innerHTML=`
+ <section class="article-wrap"><div class="breadcrumbs"><button onclick="route('docs')">Documentation</button><span>/</span><span>${d.section}</span></div>
+ <article class="article"><span class="eyebrow">${d.section.toUpperCase()}</span><h1>${d.title}</h1><p class="article-lead">${d.summary}</p>
+ ${d.image ? `<figure class="article-image"><img src="${escapeHtml(d.image.src)}" alt="${escapeHtml(d.image.alt)}"><figcaption>${escapeHtml(d.image.caption)}</figcaption></figure>` : ''}
+ ${d.body.map(([h,content])=>renderArticleSection(h,content)).join('')}
+ <div class="article-nav"><button class="secondary" onclick="route('docs')">← All documentation</button><button class="primary" onclick="route('toolkit')">Find related tools →</button></div>
+ </article></section>`;
+}
+
+function renderReleaseNotes() {
+ document.getElementById('appMain').innerHTML=`
+ <section class="article-wrap"><div class="breadcrumbs"><button onclick="route('docs')">Documentation</button><span>/</span><span>Start here</span></div>
+ <article class="article release-notes-article"><span class="eyebrow">START HERE</span><h1>Release Notes</h1><p class="article-lead">Current build changes and recent feature history.</p>
+ <div class="release-notes-list">
+   ${window.SCHOOL_SITE_RELEASE_NOTES.map(release => `
+     <section class="release-note">
+       <div class="release-note-heading">
+         <div><span class="release-note-label">RELEASE</span><h2>Build ${escapeHtml(release.version)}</h2></div>
+         <time>${escapeHtml(release.date)}</time>
+       </div>
+       <p class="release-note-description">${escapeHtml(release.description)}</p>
+       ${release.features.length ? `<ul>${release.features.map(feature => `<li>${escapeHtml(feature)}</li>`).join('')}</ul>` : '<p class="release-note-empty">No additional feature notes were recorded for this release.</p>'}
+     </section>
+   `).join('')}
+ </div>
+ <div class="article-nav"><button class="secondary" onclick="route('docs')">← All documentation</button><button class="primary" onclick="route('download')">Download latest build →</button></div>
+ </article></section>`;
+}
+
+/* Toolkit browsing and category filtering. */
+
+let activeToolCat = "All";
+let activeToolIndex = null;
+
+function toolCategories() {
+  return [
+    "All",
+    ...new Set(tools
+      .map(tool => toolCategory(tool))
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b)))
+  ];
+}
+
+function toolGroupLabel(category) {
+  if (category === 'All') return `All tools (${tools.length})`;
+  const count = tools.filter(tool => toolCategory(tool) === category).length;
+  return `${category} (${count})`;
+}
+
+function renderToolkit() {
+  activeToolCat = "All";
+  activeToolIndex = null;
+
+    document.getElementById("appMain").innerHTML = `
+        <section class="page-head">
+            <span class="eyebrow">TOOLKIT</span>
+
+            <h1>Every tool, searchable</h1>
+
+            <p>
+                Browse SchoolSite Pro tools by workflow or search by
+                tool name, description, or details.
+            </p>
+        </section>
+
+        <section class="section">
+
+            <div class="tool-layout">
+                <div class="tool-results">
+
+                    <div
+                        id="toolCount"
+                        class="count">
+                    </div>
+
+                    <div
+                        id="toolGrid"
+                        class="tool-grid">
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+    `;
+
+    filterTools("");
+}
+
+
+/* ---------------------------------------------------------
+   CHANGE CATEGORY
+   --------------------------------------------------------- */
+
+function selectToolCategory(category) {
+
+    activeToolCat = toolCategories().includes(category)
+      ? category
+      : null;
+    activeToolIndex = null;
+
+    const searchInput =
+        document.getElementById("toolSearch");
+
+    filterTools(
+        searchInput
+            ? searchInput.value
+            : ""
+    );
+}
+
+function selectTool(index) {
+  const tool = tools[index];
+  if (!tool) return;
+
+  activeToolCat = toolCategory(tool);
+  activeToolIndex = index;
+
+  const searchInput = document.getElementById("toolSearch");
+  if (searchInput) searchInput.value = "";
+  filterTools("");
+}
+
+
+/* ---------------------------------------------------------
+   GET TOOL CATEGORY
+   --------------------------------------------------------- */
+
+function toolCategory(tool) {
+
+    return tool &&
+           tool.category &&
+           tool.category.trim()
+        ? tool.category.trim()
+  : "Other Tools";
+}
+
+
+/* ---------------------------------------------------------
+   FILTER TOOLS
+   --------------------------------------------------------- */
+
+function filterTools(search = "") {
+
+    const grid = document.getElementById("toolGrid");
+    const count = document.getElementById("toolCount");
+
+    if (!grid || !count) return;
+
+    search = search.trim().toLowerCase();
+
+    const filtered = tools.filter(tool => {
+
+        const category =
+            toolCategory(tool);
+
+        const categoryMatch =
+          activeToolCat === "All" ||
+          category === activeToolCat;
+
+        const toolMatch =
+          activeToolIndex === null ||
+          tools.indexOf(tool) === activeToolIndex;
+
+        if (!categoryMatch || !toolMatch) return false;
+
+        if (!search) return true;
+
+        const text = [
+            tool.name,
+            category,
+            tool.desc,
+          articleContentText(tool.content || tool.details)
+        ]
+        .join(" ")
+        .toLowerCase();
+
+        return text.includes(search);
+    });
+
+    if (search) {
+      filtered.sort((a, b) => {
+        const score = tool => {
+          const name = tool.name.toLowerCase();
+          const category = toolCategory(tool).toLowerCase();
+          if (name === search) return 0;
+          if (name.startsWith(search)) return 1;
+          if (category.startsWith(search)) return 2;
+          return 3;
+        };
+        return score(a) - score(b);
+      });
+    }
+
+    const scopeLabel = activeToolIndex !== null
+      ? tools[activeToolIndex].name
+      : search ? `matches for "${search}"` : activeToolCat === "All" ? "all tools" : activeToolCat;
+
+    const toolLabel = filtered.length === 1 ? "tool" : "tools";
+
+    count.textContent =
+      `${filtered.length} ${toolLabel} · ${scopeLabel}`;
+
+    if (!filtered.length) {
+
+        grid.innerHTML = `
+            <div class="empty">
+                <strong>No tools found</strong>
+                <p>
+                    Try another search term
+                    or choose a different
+                    category.
+                </p>
+            </div>
+        `;
+
+        return;
+    }
+
+    grid.innerHTML =
+        filtered.map(tool => {
+
+            const index =
+                tools.indexOf(tool);
+
+            return `
+                <button
+                    class="tool-card"
+                    onclick="openTool(${index})">
+
+                  <img src="assets/images/tool-icon.svg" alt="">
+
+                    <div class="tool-card-content">
+
+                        <span class="tool-category">
+                          ${escapeHtml(toolCategory(tool))}
+                        </span>
+
+                        <h3>${escapeHtml(tool.name)}</h3>
+
+                        <p>${escapeHtml(tool.desc)}</p>
+
+                    </div>
+
+                </button>
+            `;
+
+        }).join("");
+}
+/* ---------------------------------------------------------
+   SAFE HTML TEXT
+   --------------------------------------------------------- */
+
+
+
+function openTool(i){
+ const t=tools[i], m=document.createElement('div'); m.className='modal'; m.id='toolModal';
+ const detailBlocks = [
+   ...(Array.isArray(t.content) ? t.content : []),
+   ...(t.details ? [{ type: 'paragraph', text: t.details }] : [])
+ ];
+ const renderedDetails = detailBlocks
+   ? detailBlocks.map(renderStructuredBlock).join('')
+   : '';
+ m.innerHTML=`<div class="modal-box"><button class="modal-x" onclick="this.closest('.modal').remove()" aria-label="Close tool details">×</button><span class="eyebrow">${escapeHtml(toolCategory(t).toUpperCase())}</span><h2>${escapeHtml(t.name)}</h2><p>${formatInlineRichText(t.desc)}</p>${renderedDetails ? `<div class="tool-details">${renderedDetails}</div>` : ''}<div class="modal-foot">${escapeHtml(RELEASE.productName)} toolkit · Build ${escapeHtml(RELEASE.version)}</div></div>`;
+ m.addEventListener('click', event => {
+   if (event.target === m) m.remove();
+ });
+ document.body.appendChild(m);
+}
+function renderDownload(){
+ document.getElementById('appMain').innerHTML=`
+ <section class="download-page">
+   <div class="download-copy">
+     <span class="eyebrow">DESKTOP ADD-IN</span>
+
+    <h1>Install ${RELEASE.productName} ${RELEASE.version}</h1>
+
+     <p>
+       A single installer adds SchoolSite Pro to ArcGIS Pro.
+       Download the latest SchoolSite Pro package below.
+     </p>
+
+     <h2>What's new</h2>
+     <ul class="news">
+       <li>Utilization Report for boundary-comparison workflows.</li>
+       <li>SYF reports can be exported during Data Setup.</li>
+       <li>Automated Attendance Matrix includes CAPACITY.</li>
+       <li>Additional residential forecast charts.</li>
+       <li>Improved Address Directory performance.</li>
+       <li>Bulk reassignment can exclude selected schools.</li>
+     </ul>
+
+     <h2>Installation</h2>
+     <div class="steps install">
+       <div>
+         <b>01</b>
+         <h3>Close ArcGIS Pro</h3>
+         <p>Quit running Pro sessions.</p>
+       </div>
+
+       <div>
+         <b>02</b>
+         <h3>Run installer</h3>
+         <p>Launch the signed installer with required permissions.</p>
+       </div>
+
+       <div>
+         <b>03</b>
+         <h3>Register SchoolSite Pro</h3>
+         <p>Open ArcGIS Pro, enter your License ID and license password, then click Activate.</p>
+       </div>
+
+       <div>
+         <b>04</b>
+         <h3>Use SchoolSite Pro</h3>
+         <p>The SchoolSite add-in appears automatically in ArcGIS Pro after activation.</p>
+       </div>
+
+       <div>
+         <b>05</b>
+         <h3>Run Data Setup</h3>
+         <p>Import and validate district data.</p>
+       </div>
+     </div>
+   </div>
+
+   <aside class="download-card">
+    <div class="version">${RELEASE.version}</div>
+
+    <p>${RELEASE.releaseDate} · MGT Impact Solutions</p>
+
+     <a
+       class="primary wide"
+      href="${RELEASE.downloadUrl}"
+       download
+     >
+       Download installer ↓
+     </a>
+
+     <dl>
+       <dt>Requires</dt>
+      <dd>${RELEASE.requirements}</dd>
+
+       <dt>Platform</dt>
+       <dd>Windows x64</dd>
+
+       <dt>Publisher</dt>
+       <dd>MGT Impact Solutions</dd>
+
+     </dl>
+
+<small>
+  ${RELEASE.productName} ${RELEASE.version} is provided through the official GitHub release.
+  <a href="${RELEASE.githubUrl}" target="_blank" rel="noopener noreferrer">
+    View on GitHub
+  </a>
+</small>
+
+   </aside>
+ </section>`;
+}
+function focusSearch() {
+  const input = document.getElementById('headerSearch');
+
+  if (input) {
+    input.focus();
+    input.select();
+  }
+}
+
+
+function openSearchOverlay() {
+  const overlay = document.getElementById('searchOverlay');
+  const input = document.getElementById('globalSearch');
+
+  if (!overlay || !input) {
+    return;
+  }
+
+  overlay.classList.add('open');
+
+  requestAnimationFrame(() => {
+    input.focus();
+    input.select();
+  });
+
+  renderSearch(input.value || '');
+}
+
+
+function closeSearch() {
+  const overlay = document.getElementById('searchOverlay');
+
+  if (overlay) {
+    overlay.classList.remove('open');
+  }
+}
+
+/* Search the local documentation and toolkit from the Ctrl/Cmd + K palette. */
+function buildSearchHits(q) {
+  q = (q || '').trim();
+  if (!q) return [];
+
+  const query = q.toLowerCase();
+  const hits = [];
+
+  docs.forEach(d => {
+    const text = (
+      d.title + ' ' +
+      d.summary + ' ' +
+      d.section + ' ' +
+      d.body.map(item => `${item[0]} ${articleContentText(item[1])}`).join(' ')
+    ).toLowerCase();
+
+    if (text.includes(query)) {
+      hits.push({
+        type: 'Documentation',
+        title: d.title,
+        meta: d.section,
+        action: () => { closeSearch(); route('doc', d.id); }
+      });
+    }
+  });
+
+  tools.forEach((t, i) => {
+    const text = (
+      t.name + ' ' +
+      t.desc + ' ' +
+      (t.details || '')
+    ).toLowerCase();
+
+    if (text.includes(query)) {
+      hits.push({
+        type: 'Tool',
+        title: t.name,
+        meta: toolCategory(t),
+        action: () => {
+          closeSearch();
+          route('toolkit');
+          setTimeout(() => { openTool(i); }, 50);
+        }
+      });
+    }
+  });
+
+  return hits;
+}
+
+function renderSearch(q) {
+  const results = document.getElementById('searchResults');
+  if (!results) return;
+
+  q = (q || '').trim();
+
+  if (!q) {
+    results.innerHTML = '<div class="search-empty"></div>';
+    return;
+  }
+  const hits = buildSearchHits(q);
+
+  if (!hits.length) {
+    results.innerHTML = `<div class="search-empty">No documentation or tools found for <strong>${escapeHtml(q)}</strong></div>`;
+    return;
+  }
+
+  results.innerHTML = hits.slice(0, 20).map((h, i) => `
+    <button class="search-result" data-search-index="${i}">
+      <span class="search-result-type">${h.type}</span>
+      <span class="search-result-content">
+        <strong>${escapeHtml(h.title)}</strong>
+        <small>${escapeHtml(h.meta)}</small>
+      </span>
+      <span class="search-result-arrow">→</span>
+    </button>
+  `).join('');
+
+  results.querySelectorAll('.search-result').forEach((button, index) => {
+    button.onclick = () => { if (hits[index]) hits[index].action(); };
+  });
+}
+
+function handleGlobalSearchKey(event) {
+  if (event.key === 'Enter') {
+    const first = document.querySelector('#searchResults .search-result');
+    if (first) first.click();
+  }
+  if (event.key === 'Escape') {
+    closeSearch();
+  }
+}
+
+
+function renderHeaderSearch(q) {
+
+  const results =
+    document.getElementById('headerSearchResults');
+
+  if (!results) {
+    return;
+  }
+
+  q = q.trim();
+
+  if (!q) {
+    results.classList.remove('show');
+    results.innerHTML = '';
+    return;
+  }
+
+  const hits = buildSearchHits(q);
+
+  if (!hits.length) {
+
+    results.innerHTML = `
+      <div class="header-search-empty">
+        No documentation or tools found for
+        <strong>${escapeHtml(q)}</strong>
+      </div>
+    `;
+
+    results.classList.add('show');
+
+    return;
+  }
+
+
+  results.innerHTML = hits
+    .slice(0, 8)
+    .map((h, i) => `
+      <button
+        class="header-search-result"
+        data-search-index="${i}"
+      >
+        <span class="header-result-type">
+          ${h.type}
+        </span>
+
+        <span class="header-result-content">
+
+          <strong>
+            ${escapeHtml(h.title)}
+          </strong>
+
+          <small>
+            ${escapeHtml(h.meta)}
+          </small>
+
+        </span>
+
+        <span class="header-result-arrow">
+          →
+        </span>
+
+      </button>
+    `)
+    .join('');
+
+
+  results.classList.add('show');
+
+
+  results
+    .querySelectorAll('.header-search-result')
+    .forEach((button, index) => {
+
+      button.onclick = () => {
+
+        if (hits[index]) {
+          hits[index].action();
+        }
+
+      };
+
+    });
+
+}
+
+
+function handleHeaderSearchKey(event) {
+
+  if (event.key === 'Enter') {
+
+    const firstResult =
+      document.querySelector(
+        '.header-search-result'
+      );
+
+    if (firstResult) {
+      firstResult.click();
+    }
+
+  }
+
+  if (event.key === 'Escape') {
+
+    clearHeaderSearch();
+
+    event.target.blur();
+
+  }
+
+}
+
+
+function clearHeaderSearch() {
+
+  const input =
+    document.getElementById('headerSearch');
+
+  const results =
+    document.getElementById('headerSearchResults');
+
+  if (input) {
+    input.value = '';
+  }
+
+  if (results) {
+    results.classList.remove('show');
+    results.innerHTML = '';
+  }
+
+}
+
+
+function escapeHtml(value) {
+
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+}
+
+function toggleMenu(){document.getElementById('mobileNav').classList.toggle('open')}
+document.addEventListener('keydown', e => {
+
+  if (
+    (e.ctrlKey || e.metaKey) &&
+    e.key.toLowerCase() === 'k'
+  ) {
+
+    e.preventDefault();
+
+    openSearchOverlay();
+
+    return;
+  }
+
+
+  if (e.key === 'Escape') {
+
+    closeSearch();
+
+  }
+
+});
+window.addEventListener('hashchange',renderRoute);
+renderRoute();
+</script>
+<script>
+(function () {
+  if (!window.chatbase || window.chatbase("getState") !== "initialized") {
+    window.chatbase = (...args) => {
+      if (!window.chatbase.q) {
+        window.chatbase.q = [];
+      }
+      window.chatbase.q.push(args);
+    };
+
+    window.chatbase = new Proxy(window.chatbase, {
+      get(target, prop) {
+        if (prop === "q") {
+          return target.q;
+        }
+
+        return (...args) => target(prop, ...args);
+      }
+    });
+  }
+
+  const onLoad = function () {
+    const script = document.createElement("script");
+    script.src = "https://www.chatbase.co/embed.min.js";
+    script.id = "c8BBOEDO7bSVDt69zISB6";
+    script.domain = "www.chatbase.co";
+    document.body.appendChild(script);
+  };
+
+  if (document.readyState === "complete") {
+    onLoad();
+  } else {
+    window.addEventListener("load", onLoad);
+  }
+})();
+</script>
+
+</body>
+</html>
